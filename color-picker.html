@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LED调色盘</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .color-picker-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        /* 调色盘样式 */
+        .color-picker-control {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .color-picker-control label {
+            display: block;
+            margin-bottom: 20px;
+            color: #2d3748;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+        }
+        
+        .color-wheel-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        
+        #colorWheel {
+            border-radius: 50%;
+            cursor: crosshair;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .color-picker {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(4px);
+        }
+        
+        .color-info {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .selected-color {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            background-color: #ffffff;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .color-values {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .color-value {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #2d3748;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div class="color-picker-container">
+        <div class="color-picker-control">
+            <label>🎨 COLOR:</label>
+            <div class="color-wheel-container">
+                <canvas id="colorWheel" width="180" height="180"></canvas>
+                <div class="color-picker" id="colorPicker"></div>
+            </div>
+            <div class="color-info">
+                <div class="selected-color" id="selectedColor"></div>
+            </div>
+            <div class="color-values">
+                <div class="color-value">RGB: <span id="rgbValue">255, 255, 255</span></div>
+                <div class="color-value">HEX: <span id="hexValue">#FFFFFF</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 调色盘功能
+        const colorWheel = document.getElementById('colorWheel');
+        const colorPicker = document.getElementById('colorPicker');
+        const selectedColor = document.getElementById('selectedColor');
+        const rgbValue = document.getElementById('rgbValue');
+        const hexValue = document.getElementById('hexValue');
+        const ctx = colorWheel.getContext('2d');
+        let currentColor = { r: 255, g: 255, b: 255 };
+        
+        // 绘制HSV颜色轮
+        function drawColorWheel() {
+            const centerX = colorWheel.width / 2;
+            const centerY = colorWheel.height / 2;
+            const radius = Math.min(centerX, centerY) - 10;
+            
+            // 清除画布
+            ctx.clearRect(0, 0, colorWheel.width, colorWheel.height);
+            
+            // 使用像素级绘制创建平滑的颜色轮
+            const imageData = ctx.createImageData(colorWheel.width, colorWheel.height);
+            const data = imageData.data;
+            
+            for (let y = 0; y < colorWheel.height; y++) {
+                for (let x = 0; x < colorWheel.width; x++) {
+                    const dx = x - centerX;
+                    const dy = y - centerY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance <= radius) {
+                        // 计算角度和饱和度
+                        let angle = Math.atan2(dy, dx);
+                        if (angle < 0) angle += 2 * Math.PI;
+                        const hue = (angle / (2 * Math.PI)) * 360;
+                        const saturation = Math.min(distance / radius, 1) * 100;
+                        // 固定亮度为50%
+                        const lightness = 50;
+                        
+                        // 转换HSL到RGB
+                        const rgb = hslToRgb(hue, saturation, lightness);
+                        
+                        const index = (y * colorWheel.width + x) * 4;
+                        data[index] = rgb.r;     // Red
+                        data[index + 1] = rgb.g; // Green
+                        data[index + 2] = rgb.b; // Blue
+                        data[index + 3] = 255;   // Alpha
+                    } else {
+                        // 圆形外部设为透明
+                        const index = (y * colorWheel.width + x) * 4;
+                        data[index + 3] = 0; // 透明
+                    }
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        }
+         
+         // HSL转RGB
+         function hslToRgb(h, s, l) {
+             h /= 360;
+             s /= 100;
+             l /= 100;
+             
+             const c = (1 - Math.abs(2 * l - 1)) * s;
+             const x = c * (1 - Math.abs((h * 6) % 2 - 1));
+             const m = l - c / 2;
+             
+             let r, g, b;
+             
+             if (0 <= h && h < 1/6) {
+                 r = c; g = x; b = 0;
+             } else if (1/6 <= h && h < 2/6) {
+                 r = x; g = c; b = 0;
+             } else if (2/6 <= h && h < 3/6) {
+                 r = 0; g = c; b = x;
+             } else if (3/6 <= h && h < 4/6) {
+                 r = 0; g = x; b = c;
+             } else if (4/6 <= h && h < 5/6) {
+                 r = x; g = 0; b = c;
+             } else {
+                 r = c; g = 0; b = x;
+             }
+             
+             return {
+                 r: Math.round((r + m) * 255),
+                 g: Math.round((g + m) * 255),
+                 b: Math.round((b + m) * 255)
+             };
+         }
+         
+         // RGB转HEX
+         function rgbToHex(r, g, b) {
+             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+         }
+         
+         // 更新颜色显示
+         function updateColorDisplay(color) {
+             currentColor = color;
+             selectedColor.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+             rgbValue.textContent = `${color.r}, ${color.g}, ${color.b}`;
+             hexValue.textContent = rgbToHex(color.r, color.g, color.b);
+             
+             // 可以在这里添加回调函数来处理颜色变化
+             console.log('Selected color:', color);
+         }
+         
+         // 拖拽状态
+         let isDragging = false;
+         
+         // 处理颜色选择的通用函数
+         function handleColorSelection(e) {
+             const rect = colorWheel.getBoundingClientRect();
+             const x = e.clientX - rect.left;
+             const y = e.clientY - rect.top;
+             
+             const centerX = colorWheel.width / 2;
+             const centerY = colorWheel.height / 2;
+             const dx = x - centerX;
+             const dy = y - centerY;
+             const distance = Math.sqrt(dx * dx + dy * dy);
+             const radius = Math.min(centerX, centerY) - 10;
+             
+             // 只在圆形区域内处理
+             if (distance <= radius) {
+                 // 计算角度和饱和度
+                 let angle = Math.atan2(dy, dx);
+                 if (angle < 0) angle += 2 * Math.PI;
+                 const hue = (angle / (2 * Math.PI)) * 360;
+                 const saturation = Math.min(distance / radius, 1) * 100;
+                 const lightness = 50;
+                 
+                 const color = hslToRgb(hue, saturation, lightness);
+                 updateColorDisplay(color);
+                 
+                 // 更新选择器位置
+                 colorPicker.style.left = x + 'px';
+                 colorPicker.style.top = y + 'px';
+                 
+                 return true;
+             }
+             return false;
+         }
+         
+         // 鼠标按下事件
+         colorWheel.addEventListener('mousedown', function(e) {
+             if (handleColorSelection(e)) {
+                 isDragging = true;
+                 colorWheel.style.cursor = 'grabbing';
+             }
+         });
+         
+         // 鼠标移动事件
+         colorWheel.addEventListener('mousemove', function(e) {
+             if (isDragging) {
+                 handleColorSelection(e);
+             } else {
+                 // 检查鼠标是否在颜色轮内
+                 const rect = colorWheel.getBoundingClientRect();
+                 const x = e.clientX - rect.left;
+                 const y = e.clientY - rect.top;
+                 const centerX = colorWheel.width / 2;
+                 const centerY = colorWheel.height / 2;
+                 const radius = Math.min(centerX, centerY) - 10;
+                 const dx = x - centerX;
+                 const dy = y - centerY;
+                 const distance = Math.sqrt(dx * dx + dy * dy);
+                 
+                 if (distance <= radius) {
+                     colorWheel.style.cursor = 'grab';
+                 } else {
+                     colorWheel.style.cursor = 'default';
+                 }
+             }
+         });
+         
+         // 鼠标抬起事件
+         colorWheel.addEventListener('mouseup', function() {
+             isDragging = false;
+             colorWheel.style.cursor = 'grab';
+         });
+         
+         // 鼠标离开事件
+         colorWheel.addEventListener('mouseleave', function() {
+             isDragging = false;
+             colorWheel.style.cursor = 'default';
+         });
+         
+         // 处理颜色轮点击（保持向后兼容）
+         colorWheel.addEventListener('click', function(e) {
+             if (!isDragging) {
+                 handleColorSelection(e);
+             }
+         });
+         
+         // RGB转HSL
+         function rgbToHsl(r, g, b) {
+             r /= 255;
+             g /= 255;
+             b /= 255;
+             
+             const max = Math.max(r, g, b);
+             const min = Math.min(r, g, b);
+             let h, s, l = (max + min) / 2;
+             
+             if (max === min) {
+                 h = s = 0; // achromatic
+             } else {
+                 const d = max - min;
+                 s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                 
+                 switch (max) {
+                     case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                     case g: h = (b - r) / d + 2; break;
+                     case b: h = (r - g) / d + 4; break;
+                 }
+                 h /= 6;
+             }
+             
+             return { h: h * 360, s: s * 100, l: l * 100 };
+         }
+         
+         // 根据HSL值更新调色盘选择器位置
+         function updateColorPickerPosition(r, g, b) {
+             const hsl = rgbToHsl(r, g, b);
+             const centerX = colorWheel.width / 2;
+             const centerY = colorWheel.height / 2;
+             const radius = Math.min(centerX, centerY) - 10;
+             
+             // 计算角度和距离
+             const angle = (hsl.h / 360) * 2 * Math.PI;
+             const distance = (hsl.s / 100) * radius;
+             
+             // 计算位置
+             const x = centerX + Math.cos(angle) * distance;
+             const y = centerY + Math.sin(angle) * distance;
+             
+             // 更新选择器位置
+             colorPicker.style.left = x + 'px';
+             colorPicker.style.top = y + 'px';
+         }
+         
+         // 初始化调色盘
+         drawColorWheel();
+         
+         // 设置初始选择器位置（中心白色）
+         colorPicker.style.left = (colorWheel.width / 2) + 'px';
+         colorPicker.style.top = (colorWheel.height / 2) + 'px';
+         updateColorDisplay(currentColor);
+         
+         // 导出函数供外部使用
+         window.ColorPicker = {
+             getCurrentColor: () => currentColor,
+             setColor: (r, g, b) => {
+                 const color = { r, g, b };
+                 updateColorDisplay(color);
+                 updateColorPickerPosition(r, g, b);
+             },
+             onColorChange: null // 可以设置回调函数
+         };
+         
+         // 如果设置了回调函数，在颜色改变时调用
+         const originalUpdateColorDisplay = updateColorDisplay;
+         updateColorDisplay = function(color) {
+             originalUpdateColorDisplay(color);
+             if (window.ColorPicker.onColorChange) {
+                 window.ColorPicker.onColorChange(color);
+             }
+         };
+    </script>
+</body>
+</html>
