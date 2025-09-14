@@ -18,15 +18,8 @@ BLEServer *pServer = NULL;
 
 Preferences preferences;
 
-// led part
-#ifdef USING_C3_BOARD
-// C3 专用逻辑
 #define LED_PIN 4
-#else
-// 普通 ESP32
-#define LED_PIN 13
-#endif
-#define LED_COUNT 7
+#define LED_COUNT 60
 Adafruit_NeoPixel pixels(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 int breathDirection = 5;
