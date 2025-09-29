@@ -18,6 +18,8 @@ BLEServer *pServer = NULL;
 
 Preferences preferences;
 
+#define SWITCH_PIN 5
+
 #define LED_PIN 4
 #define LED_COUNT 60
 Adafruit_NeoPixel pixels(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
@@ -27,6 +29,7 @@ int breathDirection = 5;
 struct State
 {
     bool isLightOn;
+    bool isSwitchOn;
     bool isBreathing;
     uint8_t r, g, b;
     uint8_t brightness;
@@ -34,7 +37,7 @@ struct State
     uint16_t periodMs; // 频率
 };
 
-static State currentState = {true, false, 255, 255, 255, 128, 128, 5000};
+static State currentState = {true, false, false, 255, 255, 255, 128, 128, 5000};
 static State lastState = currentState;
 void sendCurrentState();
 
@@ -43,6 +46,8 @@ void loadState()
     preferences.begin("app", true);
 
     currentState.isLightOn = preferences.getBool("isLightOn", currentState.isLightOn);
+
+    currentState.isSwitchOn = preferences.getBool("isSwitchOn", currentState.isSwitchOn);
 
     currentState.isBreathing = preferences.getBool("isBreathing", currentState.isBreathing);
 
@@ -78,6 +83,7 @@ void saveState()
     
     preferences.begin("app", false);
     preferences.putBool("isLightOn", currentState.isLightOn);
+    preferences.putBool("isSwitchOn", currentState.isSwitchOn);
     preferences.putBool("isBreathing", currentState.isBreathing);
     preferences.putUInt("Brightness", currentState.brightness);
     preferences.putInt("Breath_lvl", currentState.breathBrightness);
@@ -201,6 +207,16 @@ void handleCommand(String command)
         setBreathPeriodMs((uint16_t)ms);
         Serial.printf("[BREATH] Period set to %d ms\n", ms);
     }
+    else if (cmd == "SWITCH ON")
+    {
+        currentState.isSwitchOn = true;
+        digitalWrite(SWITCH_PIN, HIGH);
+    }
+    else if (cmd == "SWITCH OFF")
+    {
+        currentState.isSwitchOn = false;
+        digitalWrite(SWITCH_PIN, LOW);
+    }
 
     else if (cmd.startsWith("BRIGHT ")) // BRIGHT 后有空格
     {
@@ -283,6 +299,7 @@ void sendCurrentState()
     // 构建状态字符串
     String stateMsg = String("STATE,") + 
                      String(currentState.isLightOn) + "," +
+                     String(currentState.isSwitchOn) + "," +
                      String(currentState.isBreathing) + "," +
                      String(currentState.r) + "," +
                      String(currentState.g) + "," + 
@@ -404,6 +421,7 @@ void setup()
 {
     Serial.begin(115200);
 
+    pinMode(SWITCH_PIN, OUTPUT);
     loadState();
     setBreathPeriodMs(currentState.periodMs);
     delay(200);
@@ -412,7 +430,7 @@ void setup()
     // 初始化定时器
     initSaveDebounceTimer();
     initBLE();
-
+    digitalWrite(SWITCH_PIN, currentState.isSwitchOn ? HIGH : LOW);
     xTaskCreate(serialCommandTask, "SerialCommandTask", 4096, NULL, 1, NULL);
     xTaskCreate(bleCommandTask, "BleCommandTask", 4096, NULL, 1, NULL);
 }
